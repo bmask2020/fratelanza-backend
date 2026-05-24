@@ -1,0 +1,81 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fratelanza
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fratelanza"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fratelanza?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret-123456
+      JWT_REFRESH_SECRET: ci-refresh-secret-123456
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      ADMIN_EMAIL: admin@fratelanza.com
+      ADMIN_PASSWORD_HASH: $2b$10$cXcpFQdoEHfkf9uqeYcCG.YbMpmDpM4ejVATslMIURj3/8u5Jnp.q
+      CORS_ORIGINS: http://localhost:3000
+      ENABLE_SWAGGER: false
+      STORAGE_DRIVER: local
+      UPLOAD_DESTINATION: uploads/
+      MAX_UPLOAD_SIZE_MB: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Apply migrations
+        run: npm run prisma:migrate:deploy
+
+      - name: Seed database
+        run: npm run prisma:seed
+
+      - name: Unit tests
+        run: npm run test -- --runInBand
+
+      - name: E2E tests
+        run: npm run test:e2e -- --runInBand
+
+      - name: Build
+        run: npm run build
+
+      - name: Start production server
+        run: |
+          npm run start:prod > app.log 2>&1 &
+          sleep 10
+
+      - name: Live smoke test
+        run: npm run smoke:live
