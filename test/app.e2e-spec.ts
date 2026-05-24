@@ -9,6 +9,7 @@ import { UsersRepository } from './../src/database/repositories/users.repository
 import { ContactsRepository } from './../src/database/repositories/contacts.repository';
 import { UploadsRepository } from './../src/database/repositories/uploads.repository';
 import { AppModule } from './../src/app.module';
+import { isSwaggerEnabled } from './../src/config/runtime-config';
 import { setupApplication } from './../src/setup-app';
 
 describe('AppController (e2e)', () => {
@@ -294,7 +295,14 @@ describe('AppController (e2e)', () => {
   });
 
   it('/api/docs (GET)', () => {
-    return request(app.getHttpServer()).get('/api/docs').expect(200);
+    const expectedStatus = isSwaggerEnabled(
+      process.env.NODE_ENV,
+      process.env.ENABLE_SWAGGER,
+    )
+      ? 200
+      : 404;
+
+    return request(app.getHttpServer()).get('/api/docs').expect(expectedStatus);
   });
 
   it('/api/v1/auth/login (POST)', async () => {
